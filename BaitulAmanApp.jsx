@@ -1,518 +1,244 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Moon, Sun, MapPin, Phone, Mail, Menu, X, 
-  ChevronRight, Heart, DollarSign, MessageCircle, 
-  Send, User, Lock, Calendar, Clock, Edit3, 
-  CheckCircle, Shield, BookOpen, Volume2
+  Moon, Sun, Clock, Menu, X, Heart, Calendar, MapPin, 
+  ChevronRight, Send, Lock, Edit3, User, BookOpen, 
+  ZoomIn, MessageCircle 
 } from 'lucide-react';
 
-// --- Mock Data & Config ---
+// --- Global Constants & Mock Data ---
+const DONATION_GOAL = 50000;
+const CURRENT_DONATIONS = 32450;
+
 const INITIAL_PRAYER_TIMES = {
-  fajr: "05:15 AM",
-  dhuhr: "01:15 PM",
-  asr: "04:30 PM",
-  maghrib: "06:45 PM",
-  isha: "08:15 PM",
-  jummah: "01:30 PM",
-  sunrise: "06:30 AM",
-  iftar: "06:45 PM",
-  suhoor: "04:45 AM"
+  fajr: '05:15 AM',
+  dhuhr: '01:15 PM',
+  asr: '04:45 PM',
+  maghrib: '06:10 PM',
+  isha: '07:45 PM',
+  jummah: '01:30 PM',
+  iftar: '06:10 PM', // Ramadan specific
+  suhoor: '04:50 AM' // Ramadan specific
 };
 
 const INITIAL_ANNOUNCEMENTS = [
-  { id: 1, title: "Ramadan Preparation", date: "2024-03-01", content: "Join us for a special lecture series on preparing for the holy month." },
-  { id: 2, title: "Youth Soccer", date: "2024-03-05", content: "Registration is open for the community youth soccer league." }
+  { id: 1, title: "Ramadan Moon Sighting", date: "2024-03-10", content: "Moon sighting committee will meet after Maghrib." },
+  { id: 2, title: "Weekend Islamic School", date: "2024-03-08", content: "Registration open for ages 5-12." }
 ];
 
 const INITIAL_QUESTIONS = [
-  { id: 1, question: "When does the library open?", answer: "The library is open daily from Asr to Isha.", isPublic: true, isAnswered: true, category: "General" },
-  { id: 2, question: "Is Zakat due on jewelry?", answer: "Yes, if it meets the Nisab threshold. Please consult the Imam for specific calculations.", isPublic: true, isAnswered: true, category: "Fiqh" },
-  { id: 3, question: "Can I bring my children to Jummah?", answer: null, isPublic: true, isAnswered: false, category: "General" }
+  { id: 1, category: "Fasting", question: "Does using an inhaler break the fast?", answer: "According to most scholars, if it reaches the throat/stomach, it may break the fast. Consult local Imam for specifics.", isAnswered: true, isPublic: true },
+  { id: 2, category: "Prayer", question: "Can I pray with shoes on?", answer: "", isAnswered: false, isPublic: false }
 ];
 
-const DONATION_GOAL = 50000;
-const CURRENT_DONATIONS = 32500;
+// --- 1. Home View ---
+function HomeView({ prayerTimes, announcements, navigate }) {
+  // Helper to get next prayer (simplified logic)
+  const nextPrayer = { name: 'Asr', time: prayerTimes.asr, timeUntil: '1h 20m' };
 
-// --- Main App Component ---
-export default function App() {
-  const [view, setView] = useState('home'); // home, prayer, ask, donate, login, admin
-  const [user, setUser] = useState(null); // null or 'admin'
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  
-  // Data State
-  const [prayerTimes, setPrayerTimes] = useState(INITIAL_PRAYER_TIMES);
-  const [announcements, setAnnouncements] = useState(INITIAL_ANNOUNCEMENTS);
-  const [questions, setQuestions] = useState(INITIAL_QUESTIONS);
-  const [isRamadanMode, setIsRamadanMode] = useState(false);
-
-  // Navigation Helper
-  const navigate = (page) => {
-    setView(page);
-    setIsMenuOpen(false);
-    window.scrollTo(0, 0);
-  };
-
-  // --- Chatbot Logic ---
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'bot', text: "Assalamu Alaikum! I am the Assistant for Baitul Aman Masjid. Ask me about prayer times, location, or events." }
-  ]);
-  const [chatInput, setChatInput] = useState("");
-
-  const handleChatSubmit = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    
-    const userMsg = chatInput.toLowerCase();
-    const newMessages = [...chatMessages, { role: 'user', text: chatInput }];
-    setChatMessages(newMessages);
-    setChatInput("");
-
-    // Simple Rule-based AI
-    setTimeout(() => {
-      let botResponse = "I'm not sure about that. Please contact the office.";
-      
-      if (userMsg.includes('fajr')) botResponse = `Fajr is at ${prayerTimes.fajr}.`;
-      else if (userMsg.includes('maghrib') || userMsg.includes('iftar')) botResponse = `Maghrib/Iftar is at ${prayerTimes.maghrib}.`;
-      else if (userMsg.includes('isha')) botResponse = `Isha is at ${prayerTimes.isha}.`;
-      else if (userMsg.includes('jummah') || userMsg.includes('friday')) botResponse = `Jummah prayer is at ${prayerTimes.jummah}.`;
-      else if (userMsg.includes('time') || userMsg.includes('prayer')) botResponse = `Fajr: ${prayerTimes.fajr}, Dhuhr: ${prayerTimes.dhuhr}, Asr: ${prayerTimes.asr}, Maghrib: ${prayerTimes.maghrib}, Isha: ${prayerTimes.isha}.`;
-      else if (userMsg.includes('location') || userMsg.includes('where')) botResponse = "We are located in Dhanmondi, Dhaka. Check the map section!";
-      else if (userMsg.includes('donate') || userMsg.includes('zakat')) botResponse = "You can donate Zakat or Sadaqah on our Donation page.";
-      else if (userMsg.includes('course') || userMsg.includes('quran')) botResponse = "Quran classes are held every Tuesday and Thursday after Asr.";
-      else if (userMsg.includes('hello') || userMsg.includes('salam')) botResponse = "Wa Alaikum Assalam! How can I help you today?";
-
-      setChatMessages(prev => [...prev, { role: 'bot', text: botResponse }]);
-    }, 600);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      {/* --- Navigation --- */}
-      <nav className="sticky top-0 z-50 bg-white shadow-md border-b border-emerald-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center cursor-pointer" onClick={() => navigate('home')}>
-              <div className="bg-emerald-600 p-2 rounded-lg text-white mr-3">
-                <Moon size={20} fill="white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-emerald-900 leading-tight">Baitul Aman</h1>
-                <p className="text-xs text-emerald-600 font-medium tracking-wide">MASJID PLATFORM</p>
-              </div>
-            </div>
-
-            {/* Desktop Nav */}
-            <div className="hidden md:flex space-x-8">
-              {['Home', 'Prayer Times', 'Ask Imam', 'Donate'].map((item) => (
-                <button 
-                  key={item}
-                  onClick={() => navigate(item.toLowerCase().replace(' ', ''))}
-                  className={`text-sm font-medium transition-colors hover:text-emerald-600 ${view === item.toLowerCase().replace(' ', '') ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-slate-600'}`}
-                >
-                  {item}
-                </button>
-              ))}
-              {user === 'admin' ? (
-                <button onClick={() => navigate('admin')} className="px-4 py-2 rounded-full bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition">Dashboard</button>
-              ) : (
-                <button onClick={() => navigate('login')} className="flex items-center text-sm font-medium text-slate-500 hover:text-emerald-600">
-                  <Lock size={14} className="mr-1" /> Admin
-                </button>
-              )}
-            </div>
-
-            {/* Mobile Menu Button */}
-            <div className="md:hidden flex items-center">
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-slate-600 hover:text-emerald-600">
-                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Nav Drawer */}
-        {isMenuOpen && (
-          <div className="md:hidden bg-white border-b border-gray-100 shadow-lg absolute w-full z-50">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              {['Home', 'Prayer Times', 'Ask Imam', 'Donate', 'Admin'].map((item) => (
-                <button
-                  key={item}
-                  onClick={() => navigate(item.toLowerCase().replace(' ', ''))}
-                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-emerald-600 hover:bg-emerald-50"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </nav>
-
-      {/* --- Main Content Switcher --- */}
-      <main className="min-h-[calc(100vh-4rem)]">
-        {view === 'home' && <HomeView navigate={navigate} prayerTimes={prayerTimes} announcements={announcements} />}
-        {view === 'prayertimes' && <PrayerTimesView prayerTimes={prayerTimes} isRamadanMode={isRamadanMode} />}
-        {view === 'askimam' && <AskImamView questions={questions} setQuestions={setQuestions} />}
-        {view === 'donate' && <DonateView />}
-        {view === 'login' && <LoginView setUser={setUser} navigate={navigate} />}
-        {view === 'admin' && (
-          <AdminDashboard 
-            user={user} 
-            prayerTimes={prayerTimes} 
-            setPrayerTimes={setPrayerTimes} 
-            questions={questions}
-            setQuestions={setQuestions}
-            isRamadanMode={isRamadanMode}
-            setIsRamadanMode={setIsRamadanMode}
-            announcements={announcements}
-            setAnnouncements={setAnnouncements}
-            navigate={navigate}
-          />
-        )}
-      </main>
-
-      {/* --- Global Footer --- */}
-      <footer className="bg-slate-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div>
-            <div className="flex items-center mb-4">
-              <Moon size={24} className="text-emerald-400 mr-2" />
-              <h2 className="text-xl font-bold">Baitul Aman Masjid</h2>
-            </div>
-            <p className="text-slate-400 text-sm leading-relaxed">
-              A community-driven platform dedicated to serving the spiritual and social needs of our neighborhood in Dhanmondi.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-emerald-400">Quick Links</h3>
-            <ul className="space-y-2 text-sm text-slate-300">
-              <li><button onClick={() => navigate('prayertimes')} className="hover:text-white">Prayer Times</button></li>
-              <li><button onClick={() => navigate('askimam')} className="hover:text-white">Ask the Imam</button></li>
-              <li><button onClick={() => navigate('donate')} className="hover:text-white">Donate</button></li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-emerald-400">Contact Us</h3>
-            <div className="space-y-3 text-sm text-slate-300">
-              <div className="flex items-start">
-                <MapPin size={16} className="mt-1 mr-2 text-emerald-500" />
-                <span>Road 8/A, Dhanmondi<br/>Dhaka, Bangladesh</span>
-              </div>
-              <div className="flex items-center">
-                <Phone size={16} className="mr-2 text-emerald-500" />
-                <span>+880 123 456 7890</span>
-              </div>
-              <div className="flex items-center">
-                <Mail size={16} className="mr-2 text-emerald-500" />
-                <span>contact@baitulaman.com</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
-          © 2024 Baitul Aman Masjid Digital Platform. All rights reserved.
-        </div>
-      </footer>
-
-      {/* --- AI Chatbot FAB --- */}
-      <div className="fixed bottom-6 right-6 z-50">
-        {!isChatOpen && (
-          <button 
-            onClick={() => setIsChatOpen(true)}
-            className="bg-emerald-600 text-white p-4 rounded-full shadow-xl hover:bg-emerald-700 transition-transform hover:scale-105 flex items-center justify-center"
-          >
-            <MessageCircle size={24} />
-          </button>
-        )}
-
-        {isChatOpen && (
-          <div className="bg-white rounded-2xl shadow-2xl w-80 sm:w-96 overflow-hidden border border-emerald-100 flex flex-col h-[500px]">
-            <div className="bg-emerald-600 p-4 text-white flex justify-between items-center">
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center mr-2">
-                  <Volume2 size={16} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">Masjid Assistant</h3>
-                  <p className="text-xs text-emerald-100">Always here to help</p>
-                </div>
-              </div>
-              <button onClick={() => setIsChatOpen(false)} className="hover:bg-emerald-700 p-1 rounded">
-                <X size={18} />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-emerald-600 text-white rounded-br-none' 
-                      : 'bg-white border border-gray-200 text-slate-700 rounded-bl-none shadow-sm'
-                  }`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <form onSubmit={handleChatSubmit} className="p-3 bg-white border-t border-gray-100 flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask about prayer times..."
-                className="flex-1 px-4 py-2 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <button type="submit" className="bg-emerald-600 text-white p-2 rounded-full hover:bg-emerald-700">
-                <Send size={18} />
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --- SUB-COMPONENTS ---
-
-// 1. Home View
-function HomeView({ navigate, prayerTimes, announcements }) {
   return (
     <div className="animate-fade-in">
       {/* Hero Section */}
-      <section className="relative bg-emerald-900 text-white py-20 overflow-hidden">
-        {/* Abstract Pattern Background */}
-        <div className="absolute inset-0 opacity-10">
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                <pattern id="pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <circle cx="20" cy="20" r="2" fill="white" />
-                </pattern>
-                <rect width="100%" height="100%" fill="url(#pattern)" />
-            </svg>
+      <div className="relative bg-emerald-900 text-white py-20 px-4 overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10">
+          <div className="w-96 h-96 bg-emerald-400 rounded-full blur-3xl absolute -top-20 -left-20"></div>
+          <div className="w-96 h-96 bg-yellow-400 rounded-full blur-3xl absolute bottom-0 right-0"></div>
         </div>
         
-        <div className="max-w-7xl mx-auto px-4 relative z-10 grid md:grid-cols-2 gap-12 items-center">
-          <div>
-            <span className="inline-block px-3 py-1 bg-emerald-800 rounded-full text-xs font-semibold tracking-wider mb-4 border border-emerald-700">
-              WELCOME TO BAITUL AMAN MASJID
-            </span>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-              Connecting Hearts,<br/>Building Community.
-            </h1>
-            <p className="text-emerald-100 text-lg mb-8 max-w-lg">
-              Join us for daily prayers, community events, and educational programs. 
-              A sanctuary for peace and spiritual growth in Dhanmondi.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <button onClick={() => navigate('prayertimes')} className="px-6 py-3 bg-white text-emerald-900 font-bold rounded-lg hover:bg-emerald-50 transition shadow-lg">
-                Prayer Times
-              </button>
-              <button onClick={() => navigate('donate')} className="px-6 py-3 bg-emerald-700 text-white font-bold rounded-lg hover:bg-emerald-600 transition border border-emerald-600">
-                Make a Donation
-              </button>
-            </div>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <h1 className="text-4xl md:text-6xl font-bold mb-4">Masjid Al-Nur</h1>
+          <p className="text-emerald-100 text-lg md:text-xl mb-8">A center for worship, education, and community unity.</p>
+          <div className="flex justify-center gap-4">
+            <button onClick={() => navigate('donate')} className="bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-3 rounded-full font-bold transition shadow-lg flex items-center">
+              <Heart className="mr-2" size={20}/> Donate Now
+            </button>
+            <button onClick={() => navigate('times')} className="bg-white/10 hover:bg-white/20 backdrop-blur text-white px-6 py-3 rounded-full font-bold transition flex items-center border border-white/30">
+              <Calendar className="mr-2" size={20}/> Prayer Times
+            </button>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Info Bar */}
+      <div className="max-w-6xl mx-auto -mt-10 px-4 relative z-20">
+        <div className="bg-white rounded-xl shadow-xl p-6 grid md:grid-cols-3 gap-6 border border-slate-100">
           
-          <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl border border-white/20 shadow-2xl">
-            <h3 className="text-xl font-bold mb-4 flex items-center">
-              <Clock className="mr-2" size={20}/> Next Prayer: Asr
-            </h3>
-            <div className="text-4xl font-bold mb-2">{prayerTimes.asr}</div>
-            <p className="text-emerald-200 text-sm mb-6">Countdown: 02:15:30</p>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm border-b border-white/10 pb-2">
-                <span>Fajr</span> <span className="font-mono">{prayerTimes.fajr}</span>
-              </div>
-              <div className="flex justify-between text-sm border-b border-white/10 pb-2">
-                <span>Dhuhr</span> <span className="font-mono">{prayerTimes.dhuhr}</span>
-              </div>
-              <div className="flex justify-between text-sm border-b border-white/10 pb-2 font-bold text-emerald-300">
-                <span>Asr</span> <span className="font-mono">{prayerTimes.asr}</span>
-              </div>
-              <div className="flex justify-between text-sm border-b border-white/10 pb-2">
-                <span>Maghrib</span> <span className="font-mono">{prayerTimes.maghrib}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Isha</span> <span className="font-mono">{prayerTimes.isha}</span>
-              </div>
+          {/* Next Prayer Card */}
+          <div className="flex items-center space-x-4 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0">
+            <div className="bg-emerald-100 p-3 rounded-full text-emerald-600">
+              <Clock size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold">Next Prayer</p>
+              <h3 className="text-xl font-bold text-slate-800">{nextPrayer.name} <span className="text-emerald-600">{nextPrayer.time}</span></h3>
+              <p className="text-xs text-slate-400">Jummah: {prayerTimes.jummah}</p>
+            </div>
+          </div>
+
+          {/* Announcements Ticker */}
+          <div className="flex items-center space-x-4 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0">
+            <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+              <MessageCircle size={24} />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs text-slate-500 uppercase font-bold">Latest Update</p>
+              <p className="text-sm font-medium text-slate-800 truncate">
+                {announcements.length > 0 ? announcements[0].title : "No updates"}
+              </p>
+              <button onClick={() => navigate('gallery')} className="text-xs text-blue-500 hover:underline mt-1">View Gallery & Events</button>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div className="flex items-center space-x-4">
+            <div className="bg-orange-100 p-3 rounded-full text-orange-600">
+              <MapPin size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold">Visit Us</p>
+              <p className="text-sm font-medium text-slate-800">123 Islamic Center Way</p>
+              <a href="#" className="text-xs text-orange-500 hover:underline flex items-center mt-1">
+                Get Directions <ChevronRight size={12} />
+              </a>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* Quick Services */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-800">Our Services</h2>
-            <div className="h-1 w-20 bg-emerald-500 mx-auto mt-4 rounded-full"></div>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div onClick={() => navigate('askimam')} className="bg-slate-50 p-8 rounded-2xl border border-slate-100 hover:shadow-lg transition cursor-pointer group">
-              <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-emerald-600 transition-colors">
-                <BookOpen className="text-emerald-600 group-hover:text-white" size={28} />
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-slate-800">Ask the Imam</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Have a religious question? Submit it privately or publicly and get answers directly from our Imam.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 hover:shadow-lg transition cursor-pointer group">
-              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-blue-600 transition-colors">
-                <Calendar className="text-blue-600 group-hover:text-white" size={28} />
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-slate-800">Events & Education</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                From Quran classes to youth sports, stay updated with our community calendar.
-              </p>
-            </div>
-
-            <div onClick={() => navigate('donate')} className="bg-slate-50 p-8 rounded-2xl border border-slate-100 hover:shadow-lg transition cursor-pointer group">
-              <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-amber-600 transition-colors">
-                <DollarSign className="text-amber-600 group-hover:text-white" size={28} />
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-slate-800">Donations</h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Support the Masjid securely online. Zakat, Sadaqah, and Masjid Maintenance funds accepted.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Announcements & Map */}
-      <section className="py-16 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-2 gap-12">
-          {/* Announcements */}
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-              <Volume2 className="mr-2 text-emerald-600" /> Latest Announcements
-            </h2>
-            <div className="space-y-4">
-              {announcements.map((ann) => (
-                <div key={ann.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-lg text-slate-800">{ann.title}</h3>
-                    <span className="text-xs font-semibold px-2 py-1 bg-emerald-50 text-emerald-600 rounded">
-                      {ann.date}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 text-sm">{ann.content}</p>
-                </div>
-              ))}
-              {announcements.length === 0 && <p className="text-slate-500 italic">No announcements at this time.</p>}
-            </div>
-          </div>
-
-          {/* Map */}
-          <div>
-             <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center">
-              <MapPin className="mr-2 text-emerald-600" /> Visit Us
-            </h2>
-            <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 h-80 overflow-hidden">
-               {/* Google Maps Embed centered on Dhanmondi, Dhaka */}
-               <iframe 
-                title="Baitul Aman Masjid Location"
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.902442430136!2d90.37397731498136!3d23.75085808458925!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3755b8b33cffc3fb%3A0x4a826f475fd312af!2sDhanmondi%2C%20Dhaka%201205!5e0!3m2!1sen!2sbd!4v1647854321098!5m2!1sen!2sbd"
-                width="100%" 
-                height="100%" 
-                style={{border:0}} 
-                allowFullScreen="" 
-                loading="lazy" 
-                referrerPolicy="no-referrer-when-downgrade"
-                className="rounded-lg"
-              ></iframe>
-            </div>
-            <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
-               <span className="flex items-center"><MapPin size={16} className="mr-1"/> Dhanmondi, Dhaka</span>
-               <a href="https://maps.google.com" target="_blank" rel="noreferrer" className="text-emerald-600 font-medium hover:underline">Get Directions</a>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
 
-// 2. Prayer Times View
+// --- 2. Prayer Times View ---
 function PrayerTimesView({ prayerTimes, isRamadanMode }) {
+  const times = [
+    { name: 'Fajr', time: prayerTimes.fajr, icon: <Moon size={18} /> },
+    { name: 'Sunrise', time: '06:45 AM', icon: <Sun size={18} /> }, // Static for demo
+    { name: 'Dhuhr', time: prayerTimes.dhuhr, icon: <Sun size={18} /> },
+    { name: 'Asr', time: prayerTimes.asr, icon: <Sun size={18} /> },
+    { name: 'Maghrib', time: prayerTimes.maghrib, icon: <Moon size={18} /> },
+    { name: 'Isha', time: prayerTimes.isha, icon: <Moon size={18} /> },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12 animate-fade-in">
-      <div className="text-center mb-10">
+    <div className="max-w-2xl mx-auto px-4 py-12 animate-fade-in">
+      <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-slate-800">Daily Prayer Schedule</h2>
-        <p className="text-slate-500 mt-2">Accurate timings for the 5 daily prayers and Jummah.</p>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-emerald-100">
-        <div className="bg-emerald-600 p-6 text-white flex justify-between items-center">
-          <div>
-            <h3 className="text-2xl font-bold">Today's Timings</h3>
-            <p className="text-emerald-100 text-sm">Islamic Date: 12 Rajab 1445 AH</p>
-          </div>
-          <div className="text-right hidden sm:block">
-            <div className="text-sm opacity-80">Sunrise</div>
-            <div className="font-bold text-lg">{prayerTimes.sunrise}</div>
-          </div>
-        </div>
-
-        <div className="p-0">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="py-4 px-6 text-left text-sm font-semibold text-slate-600">Prayer</th>
-                <th className="py-4 px-6 text-right text-sm font-semibold text-slate-600">Adhan</th>
-                <th className="py-4 px-6 text-right text-sm font-semibold text-slate-600">Iqamah</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[
-                { name: 'Fajr', time: prayerTimes.fajr },
-                { name: 'Dhuhr', time: prayerTimes.dhuhr },
-                { name: 'Asr', time: prayerTimes.asr },
-                { name: 'Maghrib', time: prayerTimes.maghrib },
-                { name: 'Isha', time: prayerTimes.isha },
-                { name: 'Jummah', time: prayerTimes.jummah, isSpecial: true },
-              ].map((prayer, idx) => (
-                <tr key={prayer.name} className={`hover:bg-slate-50 transition-colors ${prayer.isSpecial ? 'bg-emerald-50/50' : ''}`}>
-                  <td className="py-4 px-6 font-medium text-slate-800 flex items-center">
-                    {prayer.isSpecial && <Sun size={16} className="text-amber-500 mr-2" />}
-                    {prayer.name}
-                  </td>
-                  {/* Mock logic for Adhan vs Iqamah difference */}
-                  <td className="py-4 px-6 text-right text-slate-500 font-mono">{prayer.time}</td>
-                  <td className="py-4 px-6 text-right font-bold text-emerald-700 font-mono">{prayer.time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="text-slate-500 mt-2">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
       </div>
 
       {isRamadanMode && (
-        <div className="mt-8 bg-indigo-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-amber-500 rounded-full opacity-20 blur-2xl"></div>
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-6 md:mb-0">
-              <h3 className="text-2xl font-bold mb-2 flex items-center">
-                <Moon className="mr-3 text-amber-400" /> Ramadan Schedule
-              </h3>
-              <p className="text-indigo-200">May Allah accept our fasting and prayers.</p>
+        <div className="bg-emerald-900 text-white rounded-xl p-6 mb-8 shadow-lg flex justify-between items-center">
+          <div>
+            <p className="text-emerald-200 text-sm font-bold uppercase">Suhoor Ends</p>
+            <p className="text-2xl font-bold">{prayerTimes.suhoor}</p>
+          </div>
+          <div className="h-10 w-px bg-emerald-700"></div>
+          <div className="text-right">
+            <p className="text-emerald-200 text-sm font-bold uppercase">Iftar Begins</p>
+            <p className="text-2xl font-bold">{prayerTimes.iftar}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-slate-50 p-4 grid grid-cols-3 font-bold text-slate-500 text-sm uppercase tracking-wide">
+          <div>Prayer</div>
+          <div className="text-center">Adhan</div>
+          <div className="text-right">Iqamah</div>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {times.map((t) => (
+            <div key={t.name} className="p-4 grid grid-cols-3 items-center hover:bg-emerald-50 transition-colors">
+              <div className="flex items-center gap-3 font-medium text-slate-800">
+                <span className="text-slate-400">{t.icon}</span>
+                {t.name}
+              </div>
+              <div className="text-center text-slate-600">{t.time}</div>
+              <div className="text-right font-bold text-emerald-700">
+                {/* Mock logic for Iqamah adding 15 mins */}
+                {t.name === 'Sunrise' ? '-' : t.time} 
+              </div>
             </div>
-            <div className="flex gap-8 text-center">
-              <div className="bg-white/10 backdrop-blur rounded-xl p-4 min-w-[120px]">
-                <div className="text-sm text-indigo-200 mb-1">Suhoor Ends</div>
-                <div className="text-2xl font-bold text-white">{prayerTimes.suhoor}</div>
+          ))}
+          <div className="p-4 grid grid-cols-3 items-center bg-emerald-50/50">
+            <div className="font-bold text-emerald-900">Jummah</div>
+            <div className="text-center text-slate-600">1:00 PM</div>
+            <div className="text-right font-bold text-emerald-700">{prayerTimes.jummah}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- 3. Gallery View (Interactive) ---
+function GalleryView() {
+  const images = [
+    { id: 1, src: "/api/placeholder/600/400", cat: "Events", caption: "Annual Eid Prayer Gathering" },
+    { id: 2, src: "/api/placeholder/600/400", cat: "Construction", caption: "New Wing Foundation Work" },
+    { id: 3, src: "/api/placeholder/600/400", cat: "Community", caption: "Ramadan Iftar Together" },
+    { id: 4, src: "/api/placeholder/600/400", cat: "Events", caption: "Youth Quran Competition" },
+    { id: 5, src: "/api/placeholder/600/400", cat: "Construction", caption: "Interior Calligraphy Art" },
+    { id: 6, src: "/api/placeholder/600/400", cat: "Community", caption: "Weekly Food Drive" },
+  ];
+
+  const [filter, setFilter] = useState('All');
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  const filteredImages = filter === 'All' ? images : images.filter(img => img.cat === filter);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-12 animate-fade-in">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold text-slate-800">Community Gallery</h2>
+        <p className="text-slate-500 mt-2">Moments of unity, worship, and progress.</p>
+      </div>
+
+      <div className="flex justify-center gap-2 mb-8 flex-wrap">
+        {['All', 'Events', 'Construction', 'Community'].map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setFilter(cat)}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300 ${
+              filter === cat 
+                ? 'bg-emerald-600 text-white shadow-md transform scale-105' 
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-400'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredImages.map((img) => (
+          <div 
+            key={img.id} 
+            onClick={() => setSelectedImage(img)}
+            className="group relative h-64 rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all duration-300 border border-slate-100"
+          >
+            <img src={img.src} alt={img.caption} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"/>
+            <div className="absolute inset-0 bg-emerald-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+              <div className="text-center text-white p-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                <p className="font-bold text-lg">{img.caption}</p>
+                <span className="text-xs bg-emerald-500/80 px-2 py-1 rounded mt-2 inline-block">{img.cat}</span>
+                <div className="mt-3 flex justify-center text-emerald-200"><ZoomIn size={24} /></div>
               </div>
-              <div className="bg-white/10 backdrop-blur rounded-xl p-4 min-w-[120px]">
-                <div className="text-sm text-indigo-200 mb-1">Iftar Time</div>
-                <div className="text-2xl font-bold text-white">{prayerTimes.iftar}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selectedImage && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedImage(null)}>
+          <button onClick={() => setSelectedImage(null)} className="absolute top-6 right-6 text-white/70 hover:text-white transition bg-white/10 hover:bg-white/20 rounded-full p-2"><X size={32} /></button>
+          <div className="max-w-4xl w-full bg-white rounded-lg overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <img src={selectedImage.src} alt={selectedImage.caption} className="w-full max-h-[80vh] object-contain bg-slate-100"/>
+            <div className="p-4 bg-white border-t border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">{selectedImage.caption}</h3>
+                <p className="text-emerald-600 text-sm">{selectedImage.cat}</p>
               </div>
+              <button onClick={() => setSelectedImage(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-200">Close</button>
             </div>
           </div>
         </div>
@@ -521,132 +247,7 @@ function PrayerTimesView({ prayerTimes, isRamadanMode }) {
   );
 }
 
-// 3. Ask Imam View
-function AskImamView({ questions, setQuestions }) {
-  const [activeTab, setActiveTab] = useState('browse'); // browse, ask
-  const [formData, setFormData] = useState({ question: '', isPublic: true, category: 'General' });
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const newQ = {
-      id: Date.now(),
-      question: formData.question,
-      answer: null,
-      isPublic: formData.isPublic,
-      isAnswered: false,
-      category: formData.category
-    };
-    setQuestions([...questions, newQ]);
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({ question: '', isPublic: true, category: 'General' });
-      setActiveTab('browse');
-    }, 2000);
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-12 animate-fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-end mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-800">Ask the Imam</h2>
-          <p className="text-slate-500 mt-2">Get answers to your religious queries.</p>
-        </div>
-        <div className="mt-4 md:mt-0 flex bg-slate-100 p-1 rounded-lg">
-          <button 
-            onClick={() => setActiveTab('browse')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'browse' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
-          >
-            Recent Answers
-          </button>
-          <button 
-            onClick={() => setActiveTab('ask')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'ask' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
-          >
-            Submit Question
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'browse' ? (
-        <div className="space-y-4">
-          {questions.filter(q => q.isPublic && q.isAnswered).map(q => (
-            <div key={q.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded uppercase tracking-wide">{q.category}</span>
-              </div>
-              <h3 className="font-bold text-lg text-slate-800 mb-4">"{q.question}"</h3>
-              <div className="bg-slate-50 p-4 rounded-lg border-l-4 border-emerald-500">
-                <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{q.answer}</p>
-                <div className="mt-2 text-xs text-slate-400 font-medium">- Answered by Imam</div>
-              </div>
-            </div>
-          ))}
-          {questions.filter(q => q.isPublic && q.isAnswered).length === 0 && (
-            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
-              <p className="text-slate-500">No public questions answered yet.</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="bg-white p-8 rounded-2xl shadow-lg border border-emerald-100 max-w-2xl mx-auto">
-          {submitted ? (
-            <div className="text-center py-8">
-              <CheckCircle className="mx-auto text-emerald-500 mb-4" size={48} />
-              <h3 className="text-xl font-bold text-slate-800">Question Submitted!</h3>
-              <p className="text-slate-500">JazakAllah Khair. The Imam will review it shortly.</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>
-                <select 
-                  className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  value={formData.category}
-                  onChange={e => setFormData({...formData, category: e.target.value})}
-                >
-                  <option>General</option>
-                  <option>Fiqh</option>
-                  <option>Family</option>
-                  <option>Aqeedah</option>
-                </select>
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Your Question</label>
-                <textarea 
-                  required
-                  rows="4"
-                  className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  placeholder="Type your question here..."
-                  value={formData.question}
-                  onChange={e => setFormData({...formData, question: e.target.value})}
-                ></textarea>
-              </div>
-              <div className="mb-8 flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="public"
-                  checked={formData.isPublic}
-                  onChange={e => setFormData({...formData, isPublic: e.target.checked})}
-                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                />
-                <label htmlFor="public" className="ml-2 text-sm text-slate-600">
-                  Allow this question to be published publicly (anonymously)
-                </label>
-              </div>
-              <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition shadow-lg">
-                Submit Question
-              </button>
-            </form>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 4. Donate View
+// --- 4. Donate View ---
 function DonateView() {
   const progress = Math.min((CURRENT_DONATIONS / DONATION_GOAL) * 100, 100);
   const [amount, setAmount] = useState('');
@@ -660,7 +261,6 @@ function DonateView() {
         <p className="text-slate-500 mt-2">"Those who spend in charity will be richly rewarded." (Quran 57:10)</p>
       </div>
 
-      {/* Fundraising Progress */}
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-emerald-100 mb-10">
         <div className="flex justify-between items-end mb-4">
           <div>
@@ -673,88 +273,44 @@ function DonateView() {
           </div>
         </div>
         <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
-          <div 
-            className="bg-emerald-500 h-full rounded-full transition-all duration-1000 ease-out" 
-            style={{ width: `${progress}%` }}
-          ></div>
+          <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${progress}%` }}></div>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-8">
-        {/* Donation Form */}
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
           <h3 className="text-xl font-bold mb-6">Make a Secure Donation</h3>
-          
           <div className="space-y-4 mb-6">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>
               <div className="grid grid-cols-3 gap-2">
                 {['Masjid Fund', 'Zakat', 'Sadaqah'].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`py-2 text-sm rounded-lg border ${category === cat ? 'bg-emerald-50 border-emerald-500 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:border-emerald-300'}`}
-                  >
+                  <button key={cat} onClick={() => setCategory(cat)} className={`py-2 text-sm rounded-lg border ${category === cat ? 'bg-emerald-50 border-emerald-500 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:border-emerald-300'}`}>
                     {cat}
                   </button>
                 ))}
               </div>
             </div>
-
             <div>
                <label className="block text-sm font-semibold text-slate-700 mb-2">Amount (BDT / USD)</label>
-               <input 
-                type="number" 
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-lg" 
-                placeholder="0.00"
-              />
+               <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-lg" placeholder="0.00" />
             </div>
           </div>
 
           <div className="space-y-3">
-             <button 
-              onClick={() => setMethod('card')}
-              className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-slate-50 transition ${method === 'card' ? 'ring-2 ring-emerald-500 border-transparent' : 'border-slate-200'}`}
-             >
-                <span className="font-bold text-slate-700">Credit Card / Stripe</span>
-             </button>
-             <button 
-               onClick={() => setMethod('bkash')}
-               className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-pink-50 transition ${method === 'bkash' ? 'ring-2 ring-pink-500 border-transparent' : 'border-slate-200'}`}
-             >
-                <span className="font-bold text-pink-600">bKash</span>
-             </button>
-             <button 
-               onClick={() => setMethod('ssl')}
-               className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-blue-50 transition ${method === 'ssl' ? 'ring-2 ring-blue-500 border-transparent' : 'border-slate-200'}`}
-             >
-                <span className="font-bold text-blue-800">SSLCommerz</span>
-             </button>
+              <button onClick={() => setMethod('card')} className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-slate-50 transition ${method === 'card' ? 'ring-2 ring-emerald-500 border-transparent' : 'border-slate-200'}`}><span className="font-bold text-slate-700">Credit Card / Stripe</span></button>
+              <button onClick={() => setMethod('bkash')} className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-pink-50 transition ${method === 'bkash' ? 'ring-2 ring-pink-500 border-transparent' : 'border-slate-200'}`}><span className="font-bold text-pink-600">bKash</span></button>
+              <button onClick={() => setMethod('ssl')} className={`w-full flex items-center justify-center py-3 border rounded-lg hover:bg-blue-50 transition ${method === 'ssl' ? 'ring-2 ring-blue-500 border-transparent' : 'border-slate-200'}`}><span className="font-bold text-blue-800">SSLCommerz</span></button>
           </div>
-
-          <button className="w-full mt-8 bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition shadow-lg">
-            Complete Donation
-          </button>
+          <button className="w-full mt-8 bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition shadow-lg">Complete Donation</button>
         </div>
 
-        {/* Info Card */}
         <div className="bg-emerald-900 text-white p-8 rounded-2xl flex flex-col justify-center">
            <h3 className="text-2xl font-bold mb-4">Why Donate?</h3>
            <ul className="space-y-4">
-             <li className="flex items-start">
-               <Heart className="mr-3 text-emerald-400 shrink-0" size={20} />
-               <span className="text-emerald-100 text-sm">Maintain the house of Allah and cover daily operational costs.</span>
-             </li>
-             <li className="flex items-start">
-               <BookOpen className="mr-3 text-emerald-400 shrink-0" size={20} />
-               <span className="text-emerald-100 text-sm">Support educational programs for children and new Muslims.</span>
-             </li>
-             <li className="flex items-start">
-               <User className="mr-3 text-emerald-400 shrink-0" size={20} />
-               <span className="text-emerald-100 text-sm">Help the needy in our community through Zakat funds.</span>
-             </li>
+             <li className="flex items-start"><Heart className="mr-3 text-emerald-400 shrink-0" size={20} /><span className="text-emerald-100 text-sm">Maintain the house of Allah and cover daily operational costs.</span></li>
+             <li className="flex items-start"><BookOpen className="mr-3 text-emerald-400 shrink-0" size={20} /><span className="text-emerald-100 text-sm">Support educational programs for children and new Muslims.</span></li>
+             <li className="flex items-start"><User className="mr-3 text-emerald-400 shrink-0" size={20} /><span className="text-emerald-100 text-sm">Help the needy in our community through Zakat funds.</span></li>
            </ul>
            <div className="mt-8 p-4 bg-white/10 rounded-lg backdrop-blur text-sm">
              <p className="font-semibold">Bank Transfer Info:</p>
@@ -766,7 +322,79 @@ function DonateView() {
   );
 }
 
-// 5. Login View
+// --- 5. Ask Imam View ---
+function AskImamView({ questions, setQuestions }) {
+    const [newQ, setNewQ] = useState('');
+    const [category, setCategory] = useState('General');
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      if (!newQ.trim()) return;
+      const q = {
+        id: Date.now(),
+        category,
+        question: newQ,
+        answer: "",
+        isAnswered: false,
+        isPublic: false
+      };
+      setQuestions([...questions, q]);
+      setNewQ('');
+      alert("Question submitted! It will appear after Imam's approval.");
+    };
+  
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12 animate-fade-in">
+        <div className="grid md:grid-cols-3 gap-8">
+          {/* Form */}
+          <div className="md:col-span-1">
+            <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 sticky top-24">
+              <h3 className="font-bold text-xl mb-4 flex items-center"><Send className="mr-2 text-emerald-600" size={20}/> Ask the Imam</h3>
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Topic</label>
+                  <select className="w-full p-2 border rounded-lg" value={category} onChange={(e)=>setCategory(e.target.value)}>
+                    <option>General</option>
+                    <option>Fiqh (Jurisprudence)</option>
+                    <option>Family</option>
+                    <option>Creed</option>
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Question</label>
+                  <textarea rows="4" className="w-full p-2 border rounded-lg" value={newQ} onChange={(e)=>setNewQ(e.target.value)} placeholder="Type your question anonymously..."></textarea>
+                </div>
+                <button className="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg hover:bg-emerald-700 transition">Submit Question</button>
+              </form>
+            </div>
+          </div>
+  
+          {/* Q&A List */}
+          <div className="md:col-span-2">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">Recent Q & A</h2>
+            <div className="space-y-6">
+              {questions.filter(q => q.isPublic && q.isAnswered).map(q => (
+                <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-start mb-3">
+                    <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full font-bold">{q.category}</span>
+                  </div>
+                  <h4 className="font-bold text-lg text-slate-800 mb-3">"{q.question}"</h4>
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <p className="text-slate-600 text-sm leading-relaxed"><span className="font-bold text-emerald-600">Imam's Answer:</span> {q.answer}</p>
+                  </div>
+                </div>
+              ))}
+              {questions.filter(q => q.isPublic && q.isAnswered).length === 0 && (
+                <p className="text-slate-500 italic">No public questions answered yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+// --- 6. Login View ---
 function LoginView({ setUser, navigate }) {
   const [pass, setPass] = useState('');
   const [error, setError] = useState(false);
@@ -812,7 +440,7 @@ function LoginView({ setUser, navigate }) {
   );
 }
 
-// 6. Admin Dashboard (Protected)
+// --- 7. Admin Dashboard (Protected) ---
 function AdminDashboard({ 
   user, prayerTimes, setPrayerTimes, 
   questions, setQuestions, 
@@ -821,23 +449,21 @@ function AdminDashboard({
   navigate 
 }) {
   
-  // Guard clause for security simulation
   useEffect(() => {
     if (user !== 'admin') navigate('login');
   }, [user, navigate]);
 
-  const [tab, setTab] = useState('times'); // times, questions, announcements
+  const [tab, setTab] = useState('times'); 
   const [replyText, setReplyText] = useState('');
   const [selectedQId, setSelectedQId] = useState(null);
 
-  // Handlers
   const handleTimeChange = (key, value) => {
     setPrayerTimes(prev => ({ ...prev, [key]: value }));
   };
 
   const handleAnswerSubmit = (id) => {
     const updated = questions.map(q => 
-      q.id === id ? { ...q, answer: replyText, isAnswered: true } : q
+      q.id === id ? { ...q, answer: replyText, isAnswered: true, isPublic: true } : q
     );
     setQuestions(updated);
     setReplyText('');
@@ -867,28 +493,12 @@ function AdminDashboard({
           <p className="text-slate-400 text-sm">Welcome back, Imam.</p>
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
-          <button 
-            onClick={() => setTab('times')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'times' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}
-          >
-            Prayer Times
-          </button>
-          <button 
-            onClick={() => setTab('questions')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'questions' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}
-          >
-            Questions <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{questions.filter(q => !q.isAnswered).length}</span>
-          </button>
-          <button 
-            onClick={() => setTab('announcements')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'announcements' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}
-          >
-            Announcements
-          </button>
+          <button onClick={() => setTab('times')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'times' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Prayer Times</button>
+          <button onClick={() => setTab('questions')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'questions' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Questions <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{questions.filter(q => !q.isAnswered).length}</span></button>
+          <button onClick={() => setTab('announcements')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'announcements' ? 'bg-emerald-500 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Announcements</button>
         </div>
       </div>
 
-      {/* Content Area */}
       <div className="bg-white rounded-2xl shadow border border-slate-200 p-6">
         
         {/* 1. Prayer Times Editor */}
@@ -898,10 +508,7 @@ function AdminDashboard({
                <h3 className="font-bold text-xl text-slate-800">Manage Prayer Schedule</h3>
                <div className="flex items-center space-x-2">
                  <span className="text-sm font-medium text-slate-600">Ramadan Mode</span>
-                 <button 
-                  onClick={() => setIsRamadanMode(!isRamadanMode)}
-                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${isRamadanMode ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                 >
+                 <button onClick={() => setIsRamadanMode(!isRamadanMode)} className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${isRamadanMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform duration-300 ${isRamadanMode ? 'translate-x-6' : ''}`}></div>
                  </button>
                </div>
@@ -912,14 +519,7 @@ function AdminDashboard({
                 (isRamadanMode || (!['iftar', 'suhoor'].includes(key))) && (
                   <div key={key} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{key}</label>
-                    <input 
-                      className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 font-mono"
-                      // Note: Inputs of type 'time' need HH:MM format (24h), but our mock data is 12h AM/PM string. 
-                      // For this mock, we'll just use text input to keep it simple with existing string format.
-                      type="text"
-                      value={prayerTimes[key]} 
-                      onChange={(e) => handleTimeChange(key, e.target.value)}
-                    />
+                    <input className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 font-mono" type="text" value={prayerTimes[key]} onChange={(e) => handleTimeChange(key, e.target.value)} />
                   </div>
                 )
               ))}
@@ -942,35 +542,14 @@ function AdminDashboard({
                   
                   {selectedQId === q.id ? (
                     <div className="mt-2">
-                      <textarea 
-                        className="w-full border border-emerald-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                        rows="3"
-                        placeholder="Type your answer..."
-                        value={replyText}
-                        onChange={e => setReplyText(e.target.value)}
-                      ></textarea>
+                      <textarea className="w-full border border-emerald-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" rows="3" placeholder="Type your answer..." value={replyText} onChange={e => setReplyText(e.target.value)}></textarea>
                       <div className="flex gap-2 mt-2">
-                        <button 
-                          onClick={() => handleAnswerSubmit(q.id)}
-                          className="px-3 py-1 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700"
-                        >
-                          Submit Answer
-                        </button>
-                        <button 
-                          onClick={() => setSelectedQId(null)}
-                          className="px-3 py-1 text-slate-500 text-sm hover:text-slate-700"
-                        >
-                          Cancel
-                        </button>
+                        <button onClick={() => handleAnswerSubmit(q.id)} className="px-3 py-1 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700">Submit Answer</button>
+                        <button onClick={() => setSelectedQId(null)} className="px-3 py-1 text-slate-500 text-sm hover:text-slate-700">Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <button 
-                      onClick={() => setSelectedQId(q.id)}
-                      className="text-sm text-emerald-600 font-semibold hover:underline flex items-center"
-                    >
-                      <Edit3 size={14} className="mr-1"/> Reply
-                    </button>
+                    <button onClick={() => setSelectedQId(q.id)} className="text-sm text-emerald-600 font-semibold hover:underline flex items-center"><Edit3 size={14} className="mr-1"/> Reply</button>
                   )}
                 </div>
               ))}
@@ -985,7 +564,6 @@ function AdminDashboard({
         {tab === 'announcements' && (
           <div>
             <h3 className="font-bold text-xl text-slate-800 mb-6">Manage Announcements</h3>
-            
             <form onSubmit={handleAddAnnouncement} className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-8">
               <h4 className="text-sm font-bold text-slate-700 mb-3">Post New Update</h4>
               <div className="grid md:grid-cols-2 gap-4 mb-3">
@@ -1002,16 +580,125 @@ function AdminDashboard({
                     <div className="font-bold text-slate-800">{ann.title}</div>
                     <div className="text-xs text-slate-500">{ann.date}</div>
                   </div>
-                  <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 hover:bg-red-50 p-2 rounded">
-                    <X size={16} />
-                  </button>
+                  <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><X size={16} /></button>
                 </div>
               ))}
             </div>
           </div>
         )}
-
       </div>
+    </div>
+  );
+}
+
+// --- Main App Component ---
+export default function App() {
+  const [page, setPage] = useState('home');
+  const [user, setUser] = useState(null); // 'admin' or null
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Central State Data
+  const [prayerTimes, setPrayerTimes] = useState(INITIAL_PRAYER_TIMES);
+  const [isRamadanMode, setIsRamadanMode] = useState(false);
+  const [announcements, setAnnouncements] = useState(INITIAL_ANNOUNCEMENTS);
+  const [questions, setQuestions] = useState(INITIAL_QUESTIONS);
+
+  const navigate = (p) => {
+    setPage(p);
+    setIsMobileMenuOpen(false);
+    window.scrollTo(0, 0);
+  };
+
+  const renderContent = () => {
+    switch(page) {
+      case 'home': return <HomeView prayerTimes={prayerTimes} announcements={announcements} navigate={navigate} />;
+      case 'times': return <PrayerTimesView prayerTimes={prayerTimes} isRamadanMode={isRamadanMode} />;
+      case 'gallery': return <GalleryView />;
+      case 'donate': return <DonateView />;
+      case 'ask': return <AskImamView questions={questions} setQuestions={setQuestions} />;
+      case 'login': return <LoginView setUser={setUser} navigate={navigate} />;
+      case 'admin': return <AdminDashboard 
+          user={user} 
+          prayerTimes={prayerTimes} setPrayerTimes={setPrayerTimes}
+          questions={questions} setQuestions={setQuestions}
+          isRamadanMode={isRamadanMode} setIsRamadanMode={setIsRamadanMode}
+          announcements={announcements} setAnnouncements={setAnnouncements}
+          navigate={navigate} 
+        />;
+      default: return <HomeView prayerTimes={prayerTimes} announcements={announcements} navigate={navigate} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-emerald-200">
+      
+      {/* Navigation */}
+      <nav className="bg-white sticky top-0 z-40 shadow-sm border-b border-slate-100">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            
+            {/* Logo */}
+            <div className="flex items-center cursor-pointer" onClick={() => navigate('home')}>
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center mr-2">
+                <Moon className="text-white" size={18} />
+              </div>
+              <span className="font-bold text-xl tracking-tight text-slate-800">Masjid Al-Nur</span>
+            </div>
+
+            {/* Desktop Menu */}
+            <div className="hidden md:flex space-x-8">
+              {['Home', 'Times', 'Gallery', 'Donate', 'Ask'].map((item) => (
+                <button 
+                  key={item}
+                  onClick={() => navigate(item.toLowerCase())}
+                  className={`text-sm font-semibold transition-colors duration-200 ${page === item.toLowerCase() ? 'text-emerald-600' : 'text-slate-500 hover:text-emerald-500'}`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-slate-600">
+                {isMobileMenuOpen ? <X /> : <Menu />}
+              </button>
+            </div>
+
+            {/* Admin Link */}
+            <div className="hidden md:block">
+              <button onClick={() => navigate(user ? 'admin' : 'login')} className="text-slate-400 hover:text-slate-600">
+                <User size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-t border-slate-100 p-4 space-y-4 shadow-lg absolute w-full z-50">
+            {['Home', 'Times', 'Gallery', 'Donate', 'Ask', 'Admin'].map((item) => (
+              <button 
+                key={item}
+                onClick={() => navigate(item === 'Admin' ? (user ? 'admin' : 'login') : item.toLowerCase())}
+                className="block w-full text-left font-semibold text-slate-600 py-2"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+
+      {/* Main Content */}
+      <main className="min-h-[calc(100vh-64px)]">
+        {renderContent()}
+      </main>
+
+      {/* Simple Footer */}
+      <footer className="bg-slate-900 text-slate-400 py-8 text-center text-sm">
+        <p>&copy; 2024 Masjid Al-Nur. All rights reserved.</p>
+      </footer>
     </div>
   );
 }
